@@ -46,8 +46,8 @@ if uploaded_file is not None:
     # Calcular a linha de totais
     totais = dados_detalhados.iloc[:, 2:].sum()
     totais_row = pd.DataFrame(totais).T
-    totais_row.insert(0, 'Descrição', 'TOTAL')
-    totais_row.insert(1, 'Código', '')
+    totais_row.insert(1, 'Descrição', '')
+    totais_row.insert(0, 'Código', 'TOTAL')
 
     # Adicionar a linha de totais ao DataFrame
     dados_detalhados = pd.concat([dados_detalhados, totais_row], ignore_index=True)
