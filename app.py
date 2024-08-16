@@ -7,7 +7,7 @@ file_path = 'base.xlsx'  # Certifique-se de que o arquivo esteja na mesma pasta
 base_df = pd.read_excel(file_path, sheet_name='base')
 
 # Título da aplicação
-st.title('Quantitativos de Servidores por Secretarias e Cargos')
+st.title('Quantitativos de Servidores por Secretaria e Cargos')
 
 # Criar um container para as seleções, exibindo lado a lado
 st.subheader('Selecione os Parâmetros')
