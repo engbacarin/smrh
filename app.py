@@ -7,7 +7,7 @@ file_path = 'base.xlsx'  # Certifique-se de que o arquivo esteja na mesma pasta
 base_df = pd.read_excel(file_path, sheet_name='base')
 
 # Título da aplicação
-st.title('Quantitativos de Servidores por Secretaria e Cargos')
+st.title('Quantitativos de Servidores por Secretarias e Cargos')
 
 # Criar um container para as seleções, exibindo lado a lado
 st.subheader('Selecione os Parâmetros')
@@ -72,7 +72,6 @@ dados_detalhados = dados_detalhados.rename(columns={'Descrição_Cargo': 'Descri
 
 # Formatar números na tabela com separador de milhar
 dados_detalhados = dados_detalhados.applymap(lambda x: f"{x:,.0f}".replace(',', '.') if isinstance(x, (int, float)) else x)
-
 # Exibir os dados detalhados em uma tabela
 st.subheader(f'Dados Detalhados dos Cargos na {selected_secretaria} ({ano_inicial}-{ano_final})')
 st.dataframe(dados_detalhados)
