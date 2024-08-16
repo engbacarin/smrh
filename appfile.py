@@ -43,11 +43,14 @@ if uploaded_file is not None:
     # Agrupar por cargo e ano dentro da secretaria selecionada e no intervalo de anos
     dados_detalhados = filtered_df.groupby(['Descrição', 'Código', 'Ano']).size().unstack(fill_value=0).reset_index()
 
-    # Adicionar uma linha de totais
-    totais = dados_detalhados.select_dtypes(include=[int, float]).sum()
-    totais['Descrição'] = 'Total'
-    totais['Código'] = ''
-    dados_detalhados = dados_detalhados.append(totais, ignore_index=True)
+    # Calcular a linha de totais
+    totais = dados_detalhados.iloc[:, 2:].sum()
+    totais_row = pd.DataFrame(totais).T
+    totais_row.insert(0, 'Descrição', 'Total')
+    totais_row.insert(1, 'Código', '')
+
+    # Adicionar a linha de totais ao DataFrame
+    dados_detalhados = pd.concat([dados_detalhados, totais_row], ignore_index=True)
 
     # Formatar números na tabela com separador de milhar
     dados_detalhados = dados_detalhados.applymap(lambda x: f"{x:,.0f}".replace(',', '.') if isinstance(x, (int, float)) else x)
