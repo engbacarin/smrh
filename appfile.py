@@ -56,7 +56,7 @@ if uploaded_file is not None:
     dados_detalhados = dados_detalhados.applymap(lambda x: f"{x:,.0f}".replace(',', '.') if isinstance(x, (int, float)) else x)
 
     # Exibir os dados detalhados em uma tabela
-    st.subheader(f'Dados Detalhados na: {selected_secretaria} ({ano_inicial}-{ano_final})')
+    st.subheader(f'Dados Detalhados dos Cargos na: {selected_secretaria} ({ano_inicial}-{ano_final})')
     st.dataframe(dados_detalhados)
 else:
     st.warning("Por favor, faça o upload de um arquivo Excel (.xlsx) para continuar. Arraste e solte o arquivo ou clique para selecionar.")
