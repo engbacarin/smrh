@@ -37,12 +37,6 @@ filtered_df = base_df[
 # Agrupar por cargo e ano dentro da secretaria selecionada e no intervalo de anos
 cargo_ano_df = filtered_df.groupby(['Ano', 'Descrição_Cargo']).size().unstack(fill_value=0)
 
-# Adicionar uma linha de totais
-    totais = dados_detalhados.select_dtypes(include=[int, float]).sum()
-    totais['Descrição'] = 'Total'
-    totais['Código'] = ''
-    dados_detalhados = dados_detalhados.append(totais, ignore_index=True)
-
 # Remover cargos com valor 0 para não aparecerem no gráfico
 cargo_ano_df = cargo_ano_df.loc[:, (cargo_ano_df != 0).any(axis=0)]
 
