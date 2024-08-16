@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 st.title('Quantitativos de Servidores por Secretaria')
 
 # Carregar os dados do arquivo Excel (base.xlsx)
-base_df = pd.read_excel("base.xlsx", sheet_name='base')
+base_df = pd.read_excel("base2017.xlsx", sheet_name='base')
 
 # Criar um container para as seleções, exibindo lado a lado
 st.subheader('Selecione os Parâmetros')
