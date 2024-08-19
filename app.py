@@ -82,4 +82,3 @@ dados_detalhados = dados_detalhados.applymap(lambda x: f"{x:,.0f}".replace(',', 
 # Exibir os dados detalhados em uma tabela
 st.subheader(f'Dados Detalhados dos Cargos lotados na: {selected_secretaria} ({ano_inicial}-{ano_final})')
 st.dataframe(dados_detalhados.style.set_properties(**{'text-align': 'center'}))
-st.warning("Por favor, selecione uma Secretaria para visualizar os dados.")
