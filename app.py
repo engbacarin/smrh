@@ -15,7 +15,7 @@ col1, col2, col3 = st.columns(3)
 with col1:
     # Selecionar uma secretaria e organizar em ordem alfabética
     secretarias = sorted(base_df['Secretaria'].unique().tolist())
-    selected_secretaria = st.selectbox("Escolha uma Secretaria:", secretarias)
+    selected_secretaria = st.selectbox("Escolha uma Secretaria:",[Nenhuma]+secretarias)
 
 with col2:
     # Selecionar o ano inicial
@@ -25,7 +25,9 @@ with col2:
 with col3:
     # Selecionar o ano final
     ano_final = st.selectbox("Ano Final:", anos, index=len(anos) - 1)
-
+# Verificar se alguma secretaria foi selecionada
+if selected_secretaria != "Nenhuma":
+    
 # Filtrar os dados para a secretaria selecionada e dentro do intervalo de anos
 filtered_df = base_df[
     (base_df['Secretaria'] == selected_secretaria) &
