@@ -1,13 +1,13 @@
 import streamlit as st
 import pandas as pd
-import locale
 import matplotlib.pyplot as plt
 
-# Configurar a localização para o Brasil
-locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
-
 # Configurar título da página
-st.set_page_config(page_title='Análise de Horas Extras Realizadas')
+st.set_page_config(page_title='Análise de Horas Extras Realizadas', layout='wide')
+
+# Função para formatar números no padrão brasileiro
+def format_number_brazilian(value):
+    return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # Título da página
 st.title('Análise de Horas Extras Realizadas')
@@ -52,18 +52,18 @@ if uploaded_file is not None:
         # Exibir apenas os 10 primeiros cargos com maior soma de horas realizadas
         top_10_grouped_data = grouped_data.head(10)
 
-        # Aplicando a formatação numérica brasileira na tabela
-        grouped_data['Horas_realizadas'] = grouped_data['Horas_realizadas'].apply(lambda x: locale.format_string('%.2f', x, grouping=True))
+        # Aplicando a formatação numérica manualmente na tabela
+        grouped_data['Horas_realizadas'] = grouped_data['Horas_realizadas'].apply(format_number_brazilian)
 
         # Nome do gráfico dinâmico (subheader)
-        titulo_grafico = f'Horas Extras realizadas na {", ".join(selected_secretaria)} em {", ".join(map(str, selected_years))}'
+        titulo_grafico = f'Top 10 Cargos com Horas Extras realizadas por {", ".join(selected_secretaria)} por {", ".join(map(str, selected_years))}'
         st.subheader(titulo_grafico)
 
         # Criação do gráfico usando matplotlib sem título e sem notação científica no eixo Y
         fig, ax = plt.subplots()
-        ax.bar(top_10_grouped_data['Cargo'], top_10_grouped_data['Horas_realizadas'])
-        ax.set_xlabel('')
-        ax.set_ylabel('HORAS')
+        ax.bar(top_10_grouped_data['Cod_Cargo'], top_10_grouped_data['Horas_realizadas'])
+        ax.set_xlabel('Cargos')
+        ax.set_ylabel('Horas')
 
         # Desativar notação científica no eixo Y
         ax.get_yaxis().get_major_formatter().set_scientific(False)
