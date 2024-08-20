@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Configurar título da página
-st.set_page_config(page_title='Análise de Horas Extras Realizadas', layout='wide')
+st.set_page_config(page_title='Análise de Horas Extras Realizadas')
 
 # Função para formatar números no padrão brasileiro
 def format_number_brazilian(value):
@@ -56,14 +56,14 @@ if uploaded_file is not None:
         grouped_data['Horas_realizadas'] = grouped_data['Horas_realizadas'].apply(format_number_brazilian)
 
         # Nome do gráfico dinâmico (subheader)
-        titulo_grafico = f'Top 10 Cargos com Horas Extras realizadas por {", ".join(selected_secretaria)} por {", ".join(map(str, selected_years))}'
+        titulo_grafico = f'Horas Extras realizadas na {", ".join(selected_secretaria)} em {", ".join(map(str, selected_years))}'
         st.subheader(titulo_grafico)
 
         # Criação do gráfico usando matplotlib sem título e sem notação científica no eixo Y
         fig, ax = plt.subplots()
-        ax.bar(top_10_grouped_data['Cod_Cargo'], top_10_grouped_data['Horas_realizadas'])
-        ax.set_xlabel('Cargos')
-        ax.set_ylabel('Horas')
+        ax.bar(top_10_grouped_data['Cargo'], top_10_grouped_data['Horas_realizadas'])
+        ax.set_xlabel('')
+        ax.set_ylabel('Horas Extras')
 
         # Desativar notação científica no eixo Y
         ax.get_yaxis().get_major_formatter().set_scientific(False)
