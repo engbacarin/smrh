@@ -24,9 +24,9 @@ if uploaded_file is not None:
             col1, col2, col3 = st.columns(3)
 
             with col1:
-                # Selecionar uma secretaria e organizar em ordem alfabética
+                # Selecionar múltiplas secretarias e organizar em ordem alfabética
                 secretarias = sorted(base_df['Secretaria'].unique().tolist())
-                selected_secretaria = st.selectbox("Escolha uma Secretaria:", secretarias)
+                selected_secretarias = st.multiselect("Escolha uma ou mais Secretarias:", secretarias)
 
             with col2:
                 # Selecionar o ano inicial
@@ -37,9 +37,9 @@ if uploaded_file is not None:
                 # Selecionar o ano final
                 ano_final = st.selectbox("Ano Final:", anos, index=len(anos) - 1)
 
-            # Filtrar os dados para a secretaria selecionada e dentro do intervalo de anos
+            # Filtrar os dados para as secretarias selecionadas e dentro do intervalo de anos
             filtered_df = base_df[
-                (base_df['Secretaria'] == selected_secretaria) &
+                (base_df['Secretaria'].isin(selected_secretarias)) &
                 (base_df['Ano'] >= ano_inicial) &
                 (base_df['Ano'] <= ano_final)
             ]
@@ -47,7 +47,7 @@ if uploaded_file is not None:
             # Renomear as colunas antes de agrupar
             filtered_df = filtered_df.rename(columns={'Cargo': 'Código', 'Descrição_Cargo': 'Descrição'})
 
-            # Agrupar por cargo e ano dentro da secretaria selecionada e no intervalo de anos
+            # Agrupar por cargo e ano dentro das secretarias selecionadas e no intervalo de anos
             dados_detalhados = filtered_df.groupby(['Descrição', 'Código', 'Ano']).size().unstack(fill_value=0).reset_index()
 
             # Converter colunas de ano para tipo numérico (inteiro)
@@ -64,7 +64,7 @@ if uploaded_file is not None:
             dados_detalhados = dados_detalhados.sort_values(by='Maior_Decréscimo')
 
             # Exibir os dados detalhados e a análise de decréscimo
-            st.subheader(f'Dados Detalhados dos Cargos lotados na: {selected_secretaria} ({ano_inicial}-{ano_final})')
+            st.subheader(f'Cargos lotados nas Secretarias Selecionadas ({ano_inicial}-{ano_final})')
             st.dataframe(dados_detalhados.style.set_properties(**{'text-align': 'center'}))
 
             # Exibir os cargos com maior decréscimo no quadro funcional
