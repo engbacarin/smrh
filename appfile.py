@@ -16,11 +16,19 @@ def carregar_dados(uploaded_file):
         st.error(f"Ocorreu um erro ao carregar o arquivo: {e}")
         return None
 
-# Função genérica para calcular Variação e Oscilação, utilizada em diferentes páginas
 def calcular_variacao_oscilacao_generica(df, ano_inicial, ano_final, group_by_cols):
+    # Agrupar os dados e reorganizar as colunas para que os anos sejam as colunas
     df_agrupado = df.groupby(group_by_cols + ['Ano']).size().unstack(fill_value=0).reset_index()
+
+    # Calcular a variação entre o ano final e o ano inicial
     df_agrupado['Variação'] = df_agrupado[ano_final] - df_agrupado[ano_inicial]
-    df_agrupado['Oscilação'] = df_agrupado[ano_final] - df_agrupado.iloc[:, 2:].max(axis=1)
+    
+    # Selecionar todas as colunas que representam os anos, exceto o ano final
+    anos_para_oscilacao = [col for col in df_agrupado.columns if col not in group_by_cols + ['Ano', ano_final]]
+    
+    # Calcular a oscilação como a diferença entre o ano final e o valor máximo dos anos anteriores
+    df_agrupado['Oscilação'] = df_agrupado[ano_final] - df_agrupado[anos_para_oscilacao].max(axis=1)
+    
     return df_agrupado
 
 # Função para selecionar anos e filtrar dados
