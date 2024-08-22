@@ -20,7 +20,7 @@ def carregar_dados(uploaded_file):
 def calcular_variacao_oscilacao_generica(df, ano_inicial, ano_final, group_by_cols):
     df_agrupado = df.groupby(group_by_cols + ['Ano']).size().unstack(fill_value=0).reset_index()
     df_agrupado['Variação'] = df_agrupado[ano_final] - df_agrupado[ano_inicial]
-    df_agrupado['Oscilação'] = df_agrupado[ano_final] - df_agrupado.iloc[:, 2:].max(axis=1)
+    df_agrupado['Oscilação'] = df_agrupado[ano_final] - df_agrupado.iloc[:, 1:].max(axis=1)
     return df_agrupado
 
 # Função para selecionar anos e filtrar dados
