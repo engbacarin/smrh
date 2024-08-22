@@ -1,77 +1,153 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 
-# Título da aplicação
-st.title('Quantitativos de Servidores por Secretaria')
+# Configurar a sidebar para navegação entre as páginas
+st.sidebar.title("Navegação")
+pagina_selecionada = st.sidebar.radio("Escolha a página", ["Análise Geral", "Análise por Cargo", "Análise por Secretaria"])
 
-# Upload do arquivo Excel ou CSV
-uploaded_file = st.file_uploader("Faça o upload da base de dados (.xlsx ou .csv)", type=["xlsx", "csv"], help="Arraste e solte o arquivo aqui ou clique para selecionar.")
-
-if uploaded_file is not None:
+# Função para carregar o arquivo Excel com cache para melhorar performance
+@st.cache_data
+def carregar_dados(uploaded_file):
     try:
-        # Carregar os dados do arquivo (detectar se é Excel ou CSV)
-        if uploaded_file.name.endswith('.xlsx'):
-            base_df = pd.read_excel(uploaded_file, sheet_name='base')
-        elif uploaded_file.name.endswith('.csv'):
-            base_df = pd.read_csv(uploaded_file)
-
-        # Verifica se as colunas necessárias estão no arquivo
-        if not all(col in base_df.columns for col in ['Secretaria', 'Ano', 'Cargo', 'Descrição_Cargo']):
-            st.error("O arquivo deve conter as colunas: 'Secretaria', 'Ano', 'Cargo', 'Descrição_Cargo'")
-        else:
-            # Criar um container para as seleções, exibindo lado a lado
-            st.subheader('Selecione os Parâmetros')
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                # Selecionar múltiplas secretarias e organizar em ordem alfabética
-                secretarias = sorted(base_df['Secretaria'].unique().tolist())
-                selected_secretarias = st.multiselect("Escolha uma ou mais Secretarias:", secretarias)
-
-            with col2:
-                # Selecionar o ano inicial
-                anos = sorted(base_df['Ano'].unique())
-                ano_inicial = st.selectbox("Ano Inicial:", anos, index=0)
-
-            with col3:
-                # Selecionar o ano final
-                ano_final = st.selectbox("Ano Final:", anos, index=len(anos) - 1)
-
-            # Filtrar os dados para as secretarias selecionadas e dentro do intervalo de anos
-            filtered_df = base_df[
-                (base_df['Secretaria'].isin(selected_secretarias)) &
-                (base_df['Ano'] >= ano_inicial) &
-                (base_df['Ano'] <= ano_final)
-            ]
-
-            # Renomear as colunas antes de agrupar
-            filtered_df = filtered_df.rename(columns={'Cargo': 'Código', 'Descrição_Cargo': 'Descrição'})
-
-            # Agrupar por cargo e ano dentro das secretarias selecionadas e no intervalo de anos
-            dados_detalhados = filtered_df.groupby(['Descrição', 'Código', 'Ano']).size().unstack(fill_value=0).reset_index()
-
-            # Converter colunas de ano para tipo numérico (inteiro)
-            dados_detalhados.iloc[:, 2:] = dados_detalhados.iloc[:, 2:].apply(pd.to_numeric, errors='coerce')
-
-            # Calcular a diferença ano a ano e somar as diferenças
-            for i in range(2, len(dados_detalhados.columns) - 1):
-                dados_detalhados[f'Dif_{dados_detalhados.columns[i+1]}'] = dados_detalhados.iloc[:, i+1] - dados_detalhados.iloc[:, i]
-
-            # Calcular o somatório das diferenças anuais (diminuições no quadro funcional)
-            dados_detalhados['Maior_Decréscimo'] = dados_detalhados.filter(like='Dif_').sum(axis=1)
-
-            # Ordenar os cargos que tiveram maior diminuição no quadro funcional
-            dados_detalhados = dados_detalhados.sort_values(by='Maior_Decréscimo')
-
-            # Exibir os dados detalhados e a análise de decréscimo
-            st.subheader(f'Cargos lotados nas Secretarias Selecionadas ({ano_inicial}-{ano_final})')
-            st.dataframe(dados_detalhados.style.set_properties(**{'text-align': 'center'}))
-
-            # Exibir os cargos com maior decréscimo no quadro funcional
-            st.subheader(f'Cargos com Maior Decréscimo no Quadro Funcional ({ano_inicial}-{ano_final})')
-            st.dataframe(dados_detalhados[['Descrição', 'Código', 'Maior_Decréscimo']].style.set_properties(**{'text-align': 'center'}))
-
+        df = pd.read_excel(uploaded_file, sheet_name='base')
+        return df
     except Exception as e:
-        st.error(f"Ocorreu um erro ao processar o arquivo: {e}")
+        st.error(f"Ocorreu um erro ao carregar o arquivo: {e}")
+        return None
+
+# Função genérica para calcular Variação e Oscilação, utilizada em diferentes páginas
+def calcular_variacao_oscilacao_generica(df, ano_inicial, ano_final, group_by_cols):
+    df_agrupado = df.groupby(group_by_cols + ['Ano']).size().unstack(fill_value=0).reset_index()
+    df_agrupado['Variação'] = df_agrupado[ano_final] - df_agrupado[ano_inicial]
+    df_agrupado['Oscilação'] = df_agrupado[ano_final] - df_agrupado.iloc[:, 2:].max(axis=1)
+    return df_agrupado
+
+# Função para selecionar anos e filtrar dados
+def filtrar_dados(df):
+    anos = sorted(df['Ano'].unique())
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        ano_inicial = st.selectbox("Ano Inicial:", anos, index=0)
+    with col2:
+        ano_final = st.selectbox("Ano Final:", anos, index=len(anos) - 1)
+
+    df_filtrado = df[(df['Ano'] >= ano_inicial) & (df['Ano'] <= ano_final)]
+    return df_filtrado, ano_inicial, ano_final
+
+# Função para exibir gráficos de Variação e Oscilação
+def exibir_graficos_variacao_oscilacao(df_agrupado, tipo_analise):
+    top_10_neg_var = df_agrupado.nsmallest(10, 'Variação')
+    top_10_neg_osc = df_agrupado.nsmallest(10, 'Oscilação')
+
+    if tipo_analise == 'Secretaria':
+        titulo_variacao = "Secretarias com Maiores Redução"
+        titulo_oscilacao = "Oscilação Máxima"
+    else:
+        titulo_variacao = "Cargos com Maiores Redução"
+        titulo_oscilacao = "Oscilação Máxima"
+
+    fig_top_10_variacao = px.bar(top_10_neg_var, x='Variação', y=top_10_neg_var.columns[0],
+                                 orientation='h',
+                                 title=titulo_variacao,
+                                 labels={'Variação': 'Variação'})
+
+    fig_top_10_oscilacao = px.bar(top_10_neg_osc, x='Oscilação', y=top_10_neg_osc.columns[0],
+                                  orientation='h',
+                                  title=titulo_oscilacao,
+                                  labels={'Oscilação': 'Oscilação Máxima'})
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.plotly_chart(fig_top_10_variacao)
+    with col2:
+        st.plotly_chart(fig_top_10_oscilacao)
+
+# Função para exibir a página "Análise Geral"
+def pagina_analise_geral(df):
+    st.title("Panorama Geral de Servidores")
+
+    df_filtrado, ano_inicial, ano_final = filtrar_dados(df)
+    panorama_geral = calcular_variacao_oscilacao_generica(df_filtrado, ano_inicial, ano_final, ['Secretaria'])
+
+    exibir_graficos_variacao_oscilacao(panorama_geral, 'Secretaria')
+
+    st.subheader('Quantidades de Servidores por Secretaria')
+    st.dataframe(panorama_geral.style.set_properties(**{'text-align': 'center'}), height=400, use_container_width=True)
+
+# Função para exibir a página "Análise por Cargo"
+def pagina_analise_cargo(df):
+    st.title("Panorama Geral de Servidores por Cargo")
+
+    df_filtrado, ano_inicial, ano_final = filtrar_dados(df)
+    panorama_cargo = calcular_variacao_oscilacao_generica(df_filtrado, ano_inicial, ano_final, ['Cargo', 'Descrição_Cargo'])
+
+    exibir_graficos_variacao_oscilacao(panorama_cargo, 'Cargo')
+
+    st.subheader('Quantidades de Servidores por Cargo')
+    st.dataframe(panorama_cargo.style.set_properties(**{'text-align': 'center'}), height=400, use_container_width=True)
+
+# Função para exibir a página "Quadro Funcional por Secretaria"
+def pagina_analise_secretaria(df):
+    st.title("Quadro Funcional por Secretaria")
+
+    # Container com multiselect de Secretaria e seleção de anos
+    with st.container():
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            secretarias = st.multiselect("Selecione as Secretarias:", options=df['Secretaria'].unique())
+        with col2:
+            ano_inicial = st.selectbox("Ano Inicial:", sorted(df['Ano'].unique()), index=0)
+        with col3:
+            ano_final = st.selectbox("Ano Final:", sorted(df['Ano'].unique()), index=len(sorted(df['Ano'].unique())) - 1)
+
+    if secretarias:
+        # Filtrar os dados
+        df_filtrado = df[(df['Secretaria'].isin(secretarias)) & (df['Ano'] >= ano_inicial) & (df['Ano'] <= ano_final)]
+
+        # Agrupar os dados por Cargo, Descrição_Cargo e Ano
+        panorama_secretaria = df_filtrado.groupby(['Cargo', 'Descrição_Cargo', 'Ano']).size().unstack(fill_value=0).reset_index()
+
+        # Calcular Variação e Oscilação
+        panorama_secretaria['Variação'] = panorama_secretaria[ano_final] - panorama_secretaria[ano_inicial]
+        panorama_secretaria['Oscilação'] = panorama_secretaria[ano_final] - panorama_secretaria.iloc[:, 2:].max(axis=1)
+
+        # Adicionar uma linha de soma na tabela
+        sum_row = pd.DataFrame(panorama_secretaria.iloc[:, 2:].sum()).T
+        sum_row['Cargo'] = 'Total'
+        sum_row['Descrição_Cargo'] = ''
+        panorama_secretaria = pd.concat([panorama_secretaria, sum_row], ignore_index=True)
+
+        # Gráfico de Barras Agrupadas
+        fig_barras_agrupadas = px.bar(panorama_secretaria[:-1], x='Cargo', y=list(range(ano_inicial, ano_final+1)),
+                                      title="Distribuição de Servidores por Secretaria",
+                                      labels={'value': 'Quantidade de Servidores', 'variable': 'Ano'})
+
+        st.plotly_chart(fig_barras_agrupadas)
+
+        # Exibir a tabela com as contagens e variações
+        st.subheader('Distribuição de Servidores por Secretaria')
+        st.dataframe(panorama_secretaria.style.set_properties(**{'text-align': 'center'}), height=400, use_container_width=True)
+    else:
+        st.warning("Selecione uma ou mais secretarias para ver as informações.")
+
+# Upload do arquivo Excel
+uploaded_file = st.sidebar.file_uploader("Faça o upload da base de dados (.xlsx)", type=["xlsx"], help="Arraste e solte o arquivo aqui ou clique para selecionar.")
+
+# Carregar os dados se o arquivo foi enviado
+if uploaded_file is not None:
+    with st.spinner('Carregando dados...'):
+        df = carregar_dados(uploaded_file)
+
+    if df is not None:
+        # Verificar qual página foi selecionada e chamar a função correspondente
+        if pagina_selecionada == "Análise Geral":
+            pagina_analise_geral(df)
+        elif pagina_selecionada == "Análise por Cargo":
+            pagina_analise_cargo(df)
+        elif pagina_selecionada == "Análise por Secretaria":
+            pagina_analise_secretaria(df)
 else:
-    st.warning("Por favor, faça o upload de um arquivo Excel (.xlsx) ou CSV (.csv) para continuar. Arraste e solte o arquivo ou clique para selecionar.")
+    st.sidebar.warning("Por favor, faça o upload de um arquivo Excel (.xlsx) para continuar.")
