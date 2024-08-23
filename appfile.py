@@ -16,19 +16,11 @@ def carregar_dados(uploaded_file):
         st.error(f"Ocorreu um erro ao carregar o arquivo: {e}")
         return None
 
+# Função genérica para calcular Variação e Oscilação, utilizada em diferentes páginas
 def calcular_variacao_oscilacao_generica(df, ano_inicial, ano_final, group_by_cols):
-    # Agrupar os dados e reorganizar as colunas para que os anos sejam as colunas
     df_agrupado = df.groupby(group_by_cols + ['Ano']).size().unstack(fill_value=0).reset_index()
-
-    # Calcular a variação entre o ano final e o ano inicial
     df_agrupado['Variação'] = df_agrupado[ano_final] - df_agrupado[ano_inicial]
-    
-    # Selecionar todas as colunas que representam os anos, exceto o ano final
-    anos_para_oscilacao = [col for col in df_agrupado.columns if col not in group_by_cols + ['Ano', ano_final]]
-    
-    # Calcular a oscilação como a diferença entre o ano final e o valor máximo dos anos anteriores
-    df_agrupado['Oscilação'] = df_agrupado[ano_final] - df_agrupado[anos_para_oscilacao].max(axis=1)
-    
+    df_agrupado['Oscilação'] = df_agrupado[ano_final] - df_agrupado.iloc[:, 2:].max(axis=1)
     return df_agrupado
 
 # Função para selecionar anos e filtrar dados
@@ -115,29 +107,39 @@ def pagina_analise_secretaria(df):
         # Filtrar os dados
         df_filtrado = df[(df['Secretaria'].isin(secretarias)) & (df['Ano'] >= ano_inicial) & (df['Ano'] <= ano_final)]
 
-        # Agrupar os dados por Cargo, Descrição_Cargo e Ano
-        panorama_secretaria = df_filtrado.groupby(['Cargo', 'Descrição_Cargo', 'Ano']).size().unstack(fill_value=0).reset_index()
+        # Verificar se as colunas 'Cargo' e 'Descrição_Cargo' estão presentes
+        if 'Cargo' in df_filtrado.columns and 'Descrição_Cargo' in df_filtrado.columns:
+            # Agrupar os dados por Cargo, Descrição_Cargo e Ano
+            panorama_secretaria = df_filtrado.groupby(['Cargo', 'Descrição_Cargo', 'Ano']).size().unstack(fill_value=0).reset_index()
 
-        # Calcular Variação e Oscilação
-        panorama_secretaria['Variação'] = panorama_secretaria[ano_final] - panorama_secretaria[ano_inicial]
-        panorama_secretaria['Oscilação'] = panorama_secretaria[ano_final] - panorama_secretaria.iloc[:, 2:].max(axis=1)
+            # Forçar a inclusão de todas as colunas de anos mesmo que ausentes
+            all_years = list(range(ano_inicial, ano_final + 1))
+            for year in all_years:
+                if year not in panorama_secretaria.columns:
+                    panorama_secretaria[year] = 0
 
-        # Adicionar uma linha de soma na tabela
-        sum_row = pd.DataFrame(panorama_secretaria.iloc[:, 2:].sum()).T
-        sum_row['Cargo'] = 'Total'
-        sum_row['Descrição_Cargo'] = ''
-        panorama_secretaria = pd.concat([panorama_secretaria, sum_row], ignore_index=True)
+            # Calcular Variação e Oscilação
+            panorama_secretaria['Variação'] = panorama_secretaria[ano_final] - panorama_secretaria[ano_inicial]
+            panorama_secretaria['Oscilação'] = panorama_secretaria[ano_final] - panorama_secretaria.iloc[:, 2:].max(axis=1)
 
-        # Gráfico de Barras Agrupadas
-        fig_barras_agrupadas = px.bar(panorama_secretaria[:-1], x='Cargo', y=list(range(ano_inicial, ano_final+1)),
-                                      title="Distribuição de Servidores por Secretaria",
-                                      labels={'value': 'Quantidade de Servidores', 'variable': 'Ano'})
+            # Adicionar uma linha de soma na tabela
+            sum_row = pd.DataFrame(panorama_secretaria.iloc[:, 2:].sum()).T
+            sum_row['Cargo'] = 'Total'
+            sum_row['Descrição_Cargo'] = ''
+            panorama_secretaria = pd.concat([panorama_secretaria, sum_row], ignore_index=True)
 
-        st.plotly_chart(fig_barras_agrupadas)
+            # Gráfico de Barras Agrupadas
+            fig_barras_agrupadas = px.bar(panorama_secretaria[:-1], x='Cargo', y=all_years,
+                                          title="Distribuição de Servidores por Secretaria",
+                                          labels={'value': 'Quantidade de Servidores', 'variable': 'Ano'})
 
-        # Exibir a tabela com as contagens e variações
-        st.subheader('Distribuição de Servidores por Secretaria')
-        st.dataframe(panorama_secretaria.style.set_properties(**{'text-align': 'center'}), height=400, use_container_width=True)
+            st.plotly_chart(fig_barras_agrupadas)
+
+            # Exibir a tabela com as contagens e variações
+            st.subheader('Distribuição de Servidores por Secretaria')
+            st.dataframe(panorama_secretaria.style.set_properties(**{'text-align': 'center'}), height=400, use_container_width=True)
+        else:
+            st.error("As colunas 'Cargo' e/ou 'Descrição_Cargo' não foram encontradas nos dados. Verifique o arquivo.")
     else:
         st.warning("Selecione uma ou mais secretarias para ver as informações.")
 
