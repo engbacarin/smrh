@@ -8,7 +8,7 @@ st.set_page_config(page_title='Análise de Horas Extras Realizadas', layout='wid
 # Função para formatar números no padrão brasileiro, incluindo anos
 def format_number_brazilian(value):
     if isinstance(value, int):
-        return f"{value:,}".replace(",", ".")
+        return f"{value}"
     return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # Título da página
@@ -29,6 +29,8 @@ if uploaded_file is not None:
         data = pd.read_excel(file, sheet_name='base', usecols=['Ano', 'Mes', 'Matricula', 'Secretaria', 'Cod_Cargo', 'Cargo', 'Horas_realizadas'])
         # Converter a coluna 'Horas_realizadas' para numérico
         data['Horas_realizadas'] = pd.to_numeric(data['Horas_realizadas'], errors='coerce')
+        # Garantir que a coluna 'Ano' seja tratada como inteiro
+        data['Ano'] = data['Ano'].astype(int)
         return data
 
     # Carregar os dados uma única vez e armazenar em cache
@@ -43,94 +45,99 @@ if uploaded_file is not None:
     # Substituir os números dos meses pelos nomes correspondentes
     base_df['Mes'] = base_df['Mes'].map(meses_dict)
 
+    # Se for Análise Geral ou Análise por Secretaria, adicionar seleção de Ano Inicial e Final
+    if pagina in ["Análise Geral", "Análise por Secretaria"]:
+        col1, col2 = st.columns(2)
+        with col1:
+            ano_inicial = st.selectbox('Selecione o Ano Inicial', sorted(base_df['Ano'].unique()))
+        with col2:
+            ano_final = st.selectbox('Selecione o Ano Final', sorted(base_df['Ano'].unique(), reverse=True))
+
+        # Filtrar os dados pelo intervalo de anos selecionado
+        filtered_data_by_year = base_df[(base_df['Ano'] >= ano_inicial) & (base_df['Ano'] <= ano_final)]
+    else:
+        filtered_data_by_year = base_df
+
     if pagina == "Análise por Secretaria":
         # Filtros Interativos na Visão Geral
-        selected_years = st.multiselect('Selecione o(s) Ano(s)', base_df['Ano'].unique())
-        selected_secretaria = st.multiselect('Selecione a Secretaria', base_df['Secretaria'].unique())
+        selected_secretaria = st.multiselect('Selecione a Secretaria', filtered_data_by_year['Secretaria'].unique())
 
-        # Verificação se o usuário selecionou ao menos um ano e uma secretaria
-        if not selected_years and not selected_secretaria:
-            st.warning('Por favor, selecione ao menos um ano e uma secretaria para visualizar os dados.')
-        elif not selected_years:
-            st.warning('Por favor, selecione ao menos um ano para visualizar os dados.')
-        elif not selected_secretaria:
+        # Verificação se o usuário selecionou ao menos uma secretaria
+        if not selected_secretaria:
             st.warning('Por favor, selecione ao menos uma secretaria para visualizar os dados.')
         else:
             # Filtragem dos Dados
-            filtered_data = base_df[(base_df['Ano'].isin(selected_years)) & (base_df['Secretaria'].isin(selected_secretaria))]
+            filtered_data = filtered_data_by_year[filtered_data_by_year['Secretaria'].isin(selected_secretaria)]
 
-            # Agrupando por Cod_Cargo e somando as horas realizadas
-            grouped_data = filtered_data.groupby(['Cod_Cargo', 'Cargo'])['Horas_realizadas'].sum().reset_index()
+            # Agrupando por Cargo, Cod_Cargo e somando as horas realizadas
+            detalhamento_data = filtered_data.groupby(['Cargo', 'Cod_Cargo', 'Ano']).agg({'Horas_realizadas': 'sum'}).reset_index()
 
-            # Ordenando os dados do maior para o menor
-            grouped_data = grouped_data.sort_values(by='Horas_realizadas', ascending=False)
+            # Criar uma tabela pivô para exibir os dados com colunas para cada ano
+            detalhamento_pivot = detalhamento_data.pivot_table(values='Horas_realizadas', index=['Cargo', 'Cod_Cargo'], columns='Ano', aggfunc='sum').fillna(0)
+            
+            # Aplicar a formatação numérica brasileira
+            detalhamento_pivot_display = detalhamento_pivot.applymap(format_number_brazilian)
 
-            # Exibir apenas os 10 primeiros cargos com maior soma de horas realizadas
-            top_10_grouped_data = grouped_data.head(10)
+            # Gráfico de barras usando Plotly (mantendo o gráfico para os 10 principais cargos)
+            top_10_grouped_data = detalhamento_data.groupby(['Cargo', 'Cod_Cargo']).agg({'Horas_realizadas': 'sum'}).reset_index()
+            top_10_grouped_data = top_10_grouped_data.sort_values(by='Horas_realizadas', ascending=False).head(10)
 
-            # Nome do gráfico dinâmico (subheader)
-            titulo_grafico = f'Horas Extras realizadas na {", ".join(map(str, selected_secretaria))} em {", ".join(map(str, selected_years))}'
+            titulo_grafico = f'Horas Extras realizadas nas secretarias selecionadas entre {ano_inicial} e {ano_final}'
             st.subheader(titulo_grafico)
 
-            # Gráfico de barras usando Plotly
             fig_barras = px.bar(top_10_grouped_data, x='Cargo', y='Horas_realizadas', 
-                                labels={'Horas_realizadas': 'Horas Extras'}, 
-                                title=titulo_grafico)
+                            labels={'Horas_realizadas': 'Horas Extras'}, 
+                            title=titulo_grafico)
             st.plotly_chart(fig_barras)
 
-            # Aplicando a formatação numérica brasileira
-            grouped_data['Horas_realizadas'] = grouped_data['Horas_realizadas'].apply(format_number_brazilian)
-
-            # Exibição da Tabela de Dados Detalhados
+            # Exibição da Tabela de Dados Detalhados com colunas de ano
             st.subheader('Detalhamento dos Dados')
-            st.write(grouped_data)
-
+            st.write(detalhamento_pivot_display)
+            
     elif pagina == "Análise Geral":
-        # Agrupamento geral por Secretarias e Cargos
-        df_secretarias = base_df.groupby('Secretaria').agg({
+        # Agrupamento geral por Secretarias
+        df_secretarias = filtered_data_by_year.groupby(['Ano', 'Secretaria']).agg({
             'Horas_realizadas': 'sum'
-        }).sort_values(by='Horas_realizadas', ascending=False).head(10).reset_index()
+        }).reset_index()
 
-        df_top_cargos = base_df.groupby(['Cod_Cargo', 'Cargo']).agg({
+        # Agrupamento geral por Cargos
+        df_top_cargos = filtered_data_by_year.groupby(['Ano', 'Cod_Cargo', 'Cargo']).agg({
             'Horas_realizadas': 'sum'
-        }).sort_values(by='Horas_realizadas', ascending=False).head(10).reset_index()
+        }).reset_index()
 
-        # Aplicando a formatação numérica brasileira nas tabelas
-        df_secretarias_display = df_secretarias.copy()
-        df_top_cargos_display = df_top_cargos.copy()
+        # Manter as tabelas completas
+        df_secretarias_pivot = df_secretarias.pivot_table(values='Horas_realizadas', index='Secretaria', columns='Ano', aggfunc='sum').fillna(0)
+        df_top_cargos_pivot = df_top_cargos.pivot_table(values='Horas_realizadas', index='Cargo', columns='Ano', aggfunc='sum').fillna(0)
 
-        df_secretarias_display['Horas_realizadas'] = df_secretarias_display['Horas_realizadas'].apply(format_number_brazilian)
-        df_top_cargos_display['Horas_realizadas'] = df_top_cargos_display['Horas_realizadas'].apply(format_number_brazilian)
+        # Aplicar a formatação numérica brasileira nas tabelas
+        df_secretarias_pivot_display = df_secretarias_pivot.applymap(format_number_brazilian)
+        df_top_cargos_display = df_top_cargos_pivot.applymap(format_number_brazilian)
 
-        # Colocar Tabela 1 e Gráfico 1 lado a lado
-        with st.container():
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader('Secretarias com mais Horas Realizadas')
-                st.dataframe(df_secretarias_display)
-            
-            with col2:
-                st.subheader('Distribuição Percentual de Horas por Secretaria')
-                fig_pizza_secretarias = px.pie(df_secretarias, names='Secretaria', values='Horas_realizadas',
-                                               title='Distribuição Percentual de Horas por Secretaria')
-                fig_pizza_secretarias.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5))
-                st.plotly_chart(fig_pizza_secretarias)
+        # Mostrar apenas os 10 valores mais altos para os gráficos
+        top_10_secretarias = df_secretarias.groupby('Secretaria')['Horas_realizadas'].sum().nlargest(10).reset_index()
+        top_10_cargos = df_top_cargos.groupby('Cargo')['Horas_realizadas'].sum().nlargest(10).reset_index()
 
-        # Colocar Tabela 2 e Gráfico 2 lado a lado
-        with st.container():
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader('Cargos com mais Horas Realizadas')
-                st.dataframe(df_top_cargos_display)
-            
-            with col2:
-                st.subheader('Distribuição Percentual de Horas por Cargo')
-                fig_pizza_cargos = px.pie(df_top_cargos, names='Cod_Cargo', values='Horas_realizadas',
-                                          title='Distribuição Percentual de Horas por Código de Cargo')
-                fig_pizza_cargos.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5))
-                st.plotly_chart(fig_pizza_cargos)
+        # Exibir gráfico de pizza para distribuição percentual de horas por secretaria (top 10)
+        st.subheader('Distribuição Percentual de Horas por Secretaria')
+        fig_pizza_secretarias = px.pie(top_10_secretarias, names='Secretaria', values='Horas_realizadas',
+                                       title='Distribuição Percentual de Horas por Secretaria')
+        fig_pizza_secretarias.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5))
+        st.plotly_chart(fig_pizza_secretarias)
+
+        # Exibir gráfico de pizza para distribuição percentual de horas por cargo (top 10)
+        st.subheader('Distribuição Percentual de Horas por Cargo')
+        fig_pizza_cargos = px.pie(top_10_cargos, names='Cargo', values='Horas_realizadas',
+                                  title='Distribuição Percentual de Horas por Código de Cargo')
+        fig_pizza_cargos.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5))
+        st.plotly_chart(fig_pizza_cargos)
+
+        # Exibir tabela de secretarias
+        st.subheader('Horas Realizadas por Secretaria')
+        st.dataframe(df_secretarias_pivot_display)
+
+        # Exibir tabela de cargos
+        st.subheader('Horas Realizadas por Cargo')
+        st.dataframe(df_top_cargos_display)
 
     elif pagina == "Análise por Cargo":
         # Selecionar um cargo específico
@@ -148,7 +155,6 @@ if uploaded_file is not None:
 
         # Aplicar a formatação numérica brasileira
         extrato_mensal['Horas_realizadas'] = extrato_mensal['Horas_realizadas'].apply(format_number_brazilian)
-        extrato_mensal['Ano'] = extrato_mensal['Ano'].apply(format_number_brazilian)
 
         # Exibir os dados
         st.subheader(f'Extrato de Horas Realizadas - {selected_cargo}')
